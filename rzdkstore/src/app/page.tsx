@@ -1,31 +1,43 @@
+import Navbar from '@/components/landing/Navbar';
+import HeroSection from '@/components/landing/HeroSection';
+import CategorySection from '@/components/landing/CategorySection';
+import ProductSection from '@/components/landing/ProductSection';
+import HowToOrderSection from '@/components/landing/HowToOrderSection';
+import AdvantagesSection from '@/components/landing/AdvantagesSection';
+import FAQSection from '@/components/landing/FAQSection';
+import Footer from '@/components/landing/Footer';
+
+/**
+ * Landing Page — rzdkstore.my.id
+ *
+ * Halaman publik utama yang berfungsi sebagai:
+ * - Katalog produk preview
+ * - Informasi keunggulan & cara order
+ * - Konversi visitor → customer (CTA register/login)
+ *
+ * Struktur:
+ * 1. Navbar (sticky)
+ * 2. Hero Section (headline + CTA + trust badges)
+ * 3. Kategori Produk (5 kategori grid)
+ * 4. Produk Populer (12 produk preview)
+ * 5. Cara Order (4 langkah)
+ * 6. Keunggulan (4 benefit cards)
+ * 7. FAQ (accordion)
+ * 8. Footer (kontak + links)
+ */
 export default function LandingPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-dark">
-      <div className="text-center">
-        <h1 className="font-heading text-heading-1 text-white mb-4">
-          <span className="text-primary">rzdk</span>store
-        </h1>
-        <p className="text-body-base text-secondary-foreground mb-8">
-          Langganan Premium, Harga Terjangkau
-        </p>
-        <div className="flex gap-4 justify-center">
-          <a
-            href="/login"
-            className="px-6 py-3 bg-primary hover:bg-primary-hover text-white font-medium rounded-lg transition-colors"
-          >
-            Login
-          </a>
-          <a
-            href="/register"
-            className="px-6 py-3 border border-dark-border text-white hover:bg-dark-card rounded-lg transition-colors"
-          >
-            Daftar
-          </a>
-        </div>
-        <p className="text-body-xs text-muted-foreground mt-12">
-          🚧 Landing page dalam pengembangan — Fase 1 Fondasi Project
-        </p>
-      </div>
-    </main>
+    <>
+      <Navbar />
+      <main>
+        <HeroSection />
+        <CategorySection />
+        <ProductSection />
+        <HowToOrderSection />
+        <AdvantagesSection />
+        <FAQSection />
+      </main>
+      <Footer />
+    </>
   );
 }
