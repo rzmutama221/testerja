@@ -1,0 +1,487 @@
+// ============================================================
+// rzdkstore.my.id — Prisma Schema
+// Database: MySQL 8.x
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum FulfillType {
+  AUTO
+  MANUAL
+  SLOT
+}
+
+enum OrderStatus {
+  PENDING_REVIEW
+  APPROVED
+  WAITING_PAYMENT
+  PAYMENT_UPLOADED
+  PAYMENT_VERIFIED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  QRIS_STATIC
+  PAYMENT_GATEWAY
+}
+
+enum ActivePaymentMethod {
+  QRIS_ONLY
+  GATEWAY_ONLY
+  BOTH
+}
+
+enum GuaranteeStatus {
+  OPEN
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  RESOLVED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum VoucherTarget {
+  ALL
+  SPECIFIC_PRODUCT
+  SPECIFIC_CATEGORY
+}
+
+enum AnnouncementType {
+  INFO
+  WARNING
+  MAINTENANCE
+  PROMO
+}
+
+enum AnnouncementTarget {
+  ALL
+  SPECIFIC_PRODUCT
+  SPECIFIC_CATEGORY
+}
+
+enum NotificationType {
+  ORDER
+  PAYMENT
+  FULFILLMENT
+  GUARANTEE
+  ANNOUNCEMENT
+  SYSTEM
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+/// 4.1 — Users (Admin & Customer)
+model User {
+  id              String    @id @default(cuid())
+  username        String    @unique
+  email           String    @unique
+  password        String
+  fullName        String    @map("full_name")
+  whatsapp        String?
+  role            Role      @default(USER)
+  emailVerified   Boolean   @default(false) @map("email_verified")
+  isActive        Boolean   @default(true) @map("is_active")
+  pushSubscribed  Boolean   @default(false) @map("push_subscribed")
+  pushEndpoint    String?   @db.Text @map("push_endpoint")
+  pushKeys        Json?     @map("push_keys")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  orders              Order[]
+  emailVerifications  EmailVerification[]
+  passwordResets      PasswordReset[]
+  guarantees          Guarantee[]
+  notifications       Notification[]
+  announcements       Announcement[]       @relation("AnnouncementCreator")
+  fulfillmentsSent    OrderFulfillment[]   @relation("FulfillmentSender")
+
+  @@map("users")
+}
+
+/// 4.2 — Email Verifications
+model EmailVerification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verifications")
+}
+
+/// 4.3 — Password Resets
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
+}
+
+/// 4.4 — Categories
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String
+  slug      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  products Product[]
+
+  @@map("categories")
+}
+
+/// 4.5 — Products
+model Product {
+  id               String      @id @default(cuid())
+  categoryId       String      @map("category_id")
+  name             String
+  slug             String      @unique
+  logoUrl          String      @map("logo_url")
+  description      String?     @db.Text
+  fulfillType      FulfillType @map("fulfill_type")
+  isActive         Boolean     @default(true) @map("is_active")
+  sortOrder        Int         @default(0) @map("sort_order")
+  announcementNote String?     @db.Text @map("announcement_note")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  category Category         @relation(fields: [categoryId], references: [id])
+  variants ProductVariant[]
+
+  @@map("products")
+}
+
+/// 4.6 — Product Variants
+model ProductVariant {
+  id            String   @id @default(cuid())
+  productId     String   @map("product_id")
+  name          String
+  price         Int
+  durationDays  Int      @map("duration_days")
+  stock         Int      @default(0)
+  isUnlimited   Boolean  @default(false) @map("is_unlimited")
+  isActive      Boolean  @default(true) @map("is_active")
+  guaranteeDays Int?     @map("guarantee_days")
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  product    Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stockItems ProductStockItem[]
+  orders     Order[]
+
+  @@map("product_variants")
+}
+
+/// 4.7 — Product Stock Items (for AUTO fulfill type)
+model ProductStockItem {
+  id        String    @id @default(cuid())
+  variantId String    @map("variant_id")
+  content   String    @db.Text
+  isUsed    Boolean   @default(false) @map("is_used")
+  usedAt    DateTime? @map("used_at")
+  orderId   String?   @map("order_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  order   Order?         @relation(fields: [orderId], references: [id])
+
+  @@map("product_stock_items")
+}
+
+/// 4.8 — Orders
+model Order {
+  id              String        @id @default(cuid())
+  userId          String        @map("user_id")
+  variantId       String        @map("variant_id")
+  quantity        Int           @default(1)
+  unitPrice       Int           @map("unit_price")
+  totalPrice      Int           @map("total_price")
+  voucherId       String?       @map("voucher_id")
+  discountAmount  Int           @default(0) @map("discount_amount")
+  finalPrice      Int           @map("final_price")
+  status          OrderStatus   @default(PENDING_REVIEW)
+  rejectReason    String?       @db.Text @map("reject_reason")
+  adminNote       String?       @db.Text @map("admin_note")
+  paymentMethod   PaymentMethod @default(QRIS_STATIC) @map("payment_method")
+  paymentProof    String?       @map("payment_proof")
+  paymentAt       DateTime?     @map("payment_at")
+  completedAt     DateTime?     @map("completed_at")
+  expiredAt       DateTime?     @map("expired_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  user         User              @relation(fields: [userId], references: [id])
+  variant      ProductVariant    @relation(fields: [variantId], references: [id])
+  voucher      Voucher?          @relation(fields: [voucherId], references: [id])
+  fulfillment  OrderFulfillment?
+  guarantees   Guarantee[]
+  stockItems   ProductStockItem[]
+  netflixSlots NetflixSlot[]
+  chatgptSlots ChatgptSlot[]
+
+  @@map("orders")
+}
+
+/// 4.9 — Order Fulfillments
+model OrderFulfillment {
+  id      String   @id @default(cuid())
+  orderId String   @unique @map("order_id")
+  content String   @db.Text
+  sentAt  DateTime @default(now()) @map("sent_at")
+  sentBy  String?  @map("sent_by")
+  isAuto  Boolean  @default(false) @map("is_auto")
+
+  // Relations
+  order  Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sender User? @relation("FulfillmentSender", fields: [sentBy], references: [id])
+
+  @@map("order_fulfillments")
+}
+
+/// 4.10 — Guarantees (Warranty Claims)
+model Guarantee {
+  id                  String          @id @default(cuid())
+  orderId             String          @map("order_id")
+  userId              String          @map("user_id")
+  description         String          @db.Text
+  attachmentUrl       String?         @map("attachment_url")
+  status              GuaranteeStatus @default(OPEN)
+  adminNote           String?         @db.Text @map("admin_note")
+  resolvedAt          DateTime?       @map("resolved_at")
+  guaranteeValidUntil DateTime        @map("guarantee_valid_until")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@map("guarantees")
+}
+
+/// 4.11 — Vouchers
+model Voucher {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  description   String?
+  discountType  DiscountType  @map("discount_type")
+  discountValue Int           @map("discount_value")
+  minPurchase   Int           @default(0) @map("min_purchase")
+  maxDiscount   Int?          @map("max_discount")
+  usageLimit    Int?          @map("usage_limit")
+  usedCount     Int           @default(0) @map("used_count")
+  validFrom     DateTime      @map("valid_from")
+  validUntil    DateTime      @map("valid_until")
+  isActive      Boolean       @default(true) @map("is_active")
+  applicableTo  VoucherTarget @default(ALL) @map("applicable_to")
+  productIds    Json?         @map("product_ids")
+  categoryIds   Json?         @map("category_ids")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  orders Order[]
+
+  @@map("vouchers")
+}
+
+/// 4.12 — Announcements
+model Announcement {
+  id          String             @id @default(cuid())
+  title       String
+  content     String             @db.Text
+  type        AnnouncementType   @default(INFO)
+  target      AnnouncementTarget @default(ALL)
+  productIds  Json?              @map("product_ids")
+  categoryIds Json?              @map("category_ids")
+  isActive    Boolean            @default(true) @map("is_active")
+  publishedAt DateTime           @map("published_at")
+  expiresAt   DateTime?          @map("expires_at")
+  createdBy   String             @map("created_by")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  // Relations
+  creator User @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+
+  @@map("announcements")
+}
+
+/// 4.13 — Notifications
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  pushSent  Boolean          @default(false) @map("push_sent")
+  emailSent Boolean          @default(false) @map("email_sent")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+/// 4.14 — Netflix Accounts (Head accounts owned by admin)
+model NetflixAccount {
+  id          String   @id @default(cuid())
+  label       String
+  email       String
+  password    String
+  maxProfiles Int      @default(5) @map("max_profiles")
+  isActive    Boolean  @default(true) @map("is_active")
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  slots NetflixSlot[]
+
+  @@map("netflix_accounts")
+}
+
+/// 4.15 — Netflix Slots (Profile slots per head account)
+model NetflixSlot {
+  id            String    @id @default(cuid())
+  accountId     String    @map("account_id")
+  profileNumber Int       @map("profile_number")
+  profileName   String?   @map("profile_name")
+  isOccupied    Boolean   @default(false) @map("is_occupied")
+  orderId       String?   @map("order_id")
+  customerName  String?   @map("customer_name")
+  customerWa    String?   @map("customer_wa")
+  deviceBrand   String?   @map("device_brand")
+  deviceModel   String?   @map("device_model")
+  deviceType    String?   @map("device_type")
+  deviceOs      String?   @map("device_os")
+  loginCity     String?   @map("login_city")
+  startedAt     DateTime? @map("started_at")
+  expiredAt     DateTime? @map("expired_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  account NetflixAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  order   Order?         @relation(fields: [orderId], references: [id])
+
+  @@map("netflix_slots")
+}
+
+/// 4.16 — ChatGPT Accounts (Head accounts owned by admin)
+model ChatgptAccount {
+  id         String   @id @default(cuid())
+  label      String
+  email      String
+  password   String
+  maxMembers Int      @default(4) @map("max_members")
+  isActive   Boolean  @default(true) @map("is_active")
+  notes      String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  slots ChatgptSlot[]
+
+  @@map("chatgpt_accounts")
+}
+
+/// 4.17 — ChatGPT Slots (Member slots per head account)
+model ChatgptSlot {
+  id           String    @id @default(cuid())
+  accountId    String    @map("account_id")
+  slotNumber   Int       @map("slot_number")
+  isOccupied   Boolean   @default(false) @map("is_occupied")
+  orderId      String?   @map("order_id")
+  memberEmail  String?   @map("member_email")
+  customerName String?   @map("customer_name")
+  customerWa   String?   @map("customer_wa")
+  invitedAt    DateTime? @map("invited_at")
+  expiredAt    DateTime? @map("expired_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  account ChatgptAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  order   Order?         @relation(fields: [orderId], references: [id])
+
+  @@map("chatgpt_slots")
+}
+
+/// 4.18 — Payment Settings (Singleton)
+model PaymentSetting {
+  id                  String              @id @default("singleton")
+  qrisImagePath       String              @default("/uploads/qrisrzdkstore.png") @map("qris_image_path")
+  qrisIsActive        Boolean             @default(true) @map("qris_is_active")
+  gatewayIsActive     Boolean             @default(false) @map("gateway_is_active")
+  gatewayProvider     String?             @map("gateway_provider")
+  gatewayApiKey       String?             @map("gateway_api_key")
+  gatewaySecretKey    String?             @map("gateway_secret_key")
+  activeMethod        ActivePaymentMethod @default(QRIS_ONLY) @map("active_method")
+  paymentTimeoutHours Int                 @default(24) @map("payment_timeout_hours")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  @@map("payment_settings")
+}
+
+/// 4.19 — Financial Summaries (Daily cache)
+model FinancialSummary {
+  id              String   @id @default(cuid())
+  date            DateTime @unique
+  totalOrders     Int      @default(0) @map("total_orders")
+  completedOrders Int      @default(0) @map("completed_orders")
+  cancelledOrders Int      @default(0) @map("cancelled_orders")
+  grossRevenue    Int      @default(0) @map("gross_revenue")
+  netRevenue      Int      @default(0) @map("net_revenue")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("financial_summaries")
+}
