@@ -85,20 +85,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 7. Kirim email verifikasi
+    // 7. Kirim email verifikasi (non-blocking — gagal email tidak gagalkan registrasi)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rzdkstore.my.id';
     const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`;
 
-    await sendVerificationEmail({
-      to: email,
-      name: fullName,
-      verificationUrl,
-    });
+    try {
+      await sendVerificationEmail({
+        to: email,
+        name: fullName,
+        verificationUrl,
+      });
+    } catch (emailError) {
+      // Email gagal terkirim tapi registrasi tetap sukses
+      // User bisa minta kirim ulang via halaman login
+      console.warn('[REGISTER] Email verification could not be sent:', emailError);
+    }
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Registrasi berhasil! Silakan cek email Anda untuk verifikasi akun.',
+        message: 'Registrasi berhasil! Silakan cek email Anda untuk verifikasi akun. Jika tidak menerima email, gunakan fitur "Kirim Ulang" di halaman login.',
       },
       { status: 201 }
     );

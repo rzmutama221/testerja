@@ -45,15 +45,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 4. Kirim email
+      // 4. Kirim email (non-blocking)
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rzdkstore.my.id';
       const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
 
-      await sendResetPasswordEmail({
-        to: user.email,
-        name: user.fullName,
-        resetUrl,
-      });
+      try {
+        await sendResetPasswordEmail({
+          to: user.email,
+          name: user.fullName,
+          resetUrl,
+        });
+      } catch (emailError) {
+        console.warn('[FORGOT_PASSWORD] Email could not be sent:', emailError);
+        console.info('[FORGOT_PASSWORD] Reset URL (for local testing):', resetUrl);
+      }
     }
 
     // Selalu return sukses (jangan bocorkan apakah email terdaftar)

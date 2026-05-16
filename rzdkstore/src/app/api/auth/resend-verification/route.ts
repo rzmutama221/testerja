@@ -50,19 +50,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Kirim email
+    // Kirim email (non-blocking)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rzdkstore.my.id';
     const verificationUrl = `${appUrl}/verify-email?token=${verificationToken}`;
 
-    await sendVerificationEmail({
-      to: user.email,
-      name: user.fullName,
-      verificationUrl,
-    });
+    try {
+      await sendVerificationEmail({
+        to: user.email,
+        name: user.fullName,
+        verificationUrl,
+      });
+    } catch (emailError) {
+      console.warn('[RESEND_VERIFICATION] Email could not be sent:', emailError);
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Link verifikasi baru telah dikirim ke email Anda.',
+      message: 'Jika SMTP sudah dikonfigurasi, link verifikasi telah dikirim. Alternatif: aktifkan manual via phpMyAdmin.',
     });
   } catch (error) {
     console.error('[RESEND_VERIFICATION_ERROR]', error);
