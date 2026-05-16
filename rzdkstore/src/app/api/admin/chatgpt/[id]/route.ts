@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { encrypt } from '@/lib/encryption';
+
+/**
+ * PUT /api/admin/chatgpt/[id] — Update akun head ChatGPT
+ */
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const body = await request.json();
+    const { label, email, password, notes, isActive } = body;
+    const data: any = {};
+    if (label !== undefined) data.label = label;
+    if (email !== undefined) data.email = email;
+    if (password) data.password = encrypt(password);
+    if (notes !== undefined) data.notes = notes;
+    if (isActive !== undefined) data.isActive = isActive;
+
+    const account = await prisma.chatgptAccount.update({ where: { id: params.id }, data });
+    return NextResponse.json({ success: true, data: account });
+  } catch (error) {
+    console.error('[UPDATE_CHATGPT_ACCOUNT_ERROR]', error);
+    return NextResponse.json({ success: false, message: 'Gagal update akun' }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/admin/chatgpt/[id] — Hapus akun (hanya jika semua slot kosong)
+ */
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const occupied = await prisma.chatgptSlot.count({ where: { accountId: params.id, isOccupied: true } });
+    if (occupied > 0) {
+      return NextResponse.json({ success: false, message: `Masih ada ${occupied} slot terisi` }, { status: 400 });
+    }
+    await prisma.chatgptAccount.delete({ where: { id: params.id } });
+    return NextResponse.json({ success: true, message: 'Akun ChatGPT berhasil dihapus' });
+  } catch (error) {
+    console.error('[DELETE_CHATGPT_ACCOUNT_ERROR]', error);
+    return NextResponse.json({ success: false, message: 'Gagal hapus akun' }, { status: 500 });
+  }
+}
