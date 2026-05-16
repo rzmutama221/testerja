@@ -1,7 +1,99 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
+
+/**
+ * Upload Proof Component — digunakan saat status APPROVED
+ */
+function UploadProofForm({ orderId, onSuccess }: { orderId: string; onSuccess: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUpload() {
+    if (!file) {
+      setError('Pilih file bukti pembayaran terlebih dahulu');
+      return;
+    }
+    setUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`/api/orders/${orderId}/upload-proof`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setSuccess(true);
+        setTimeout(() => onSuccess(), 1500);
+      } else {
+        setError(data.message || 'Gagal upload');
+      }
+    } catch {
+      setError('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="w-full mt-4 p-4 bg-primary/10 border border-primary/30 rounded-lg text-center">
+        <p className="text-body-sm text-primary font-medium">Bukti pembayaran berhasil diupload!</p>
+        <p className="text-body-xs text-muted-foreground mt-1">Menunggu verifikasi admin...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full mt-4 p-4 bg-dark rounded-lg border border-dashed border-dark-border">
+      <p className="text-body-xs text-muted-foreground mb-3 text-center">
+        Upload bukti transfer (JPG, PNG, WebP, PDF — max 5MB)
+      </p>
+
+      {error && (
+        <p className="text-body-xs text-error text-center mb-2">{error}</p>
+      )}
+
+      <div className="flex flex-col items-center gap-3">
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.pdf"
+          onChange={(e) => { setFile(e.target.files?.[0] || null); setError(''); }}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="px-4 py-2 border border-dark-border text-white text-body-xs rounded-lg hover:bg-dark-card transition-colors"
+        >
+          {file ? file.name : 'Pilih File'}
+        </button>
+
+        {file && (
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={uploading}
+            className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white text-body-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          >
+            {uploading ? 'Mengupload...' : 'Upload Bukti Bayar'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 interface OrderDetail {
   id: string;
@@ -313,18 +405,8 @@ export default function OrderDetailPage() {
             </div>
             <p className="text-body-sm text-primary font-medium">{formatRupiah(order.finalPrice)}</p>
 
-            {/* Upload button placeholder */}
-            <div className="w-full mt-4 p-4 bg-dark rounded-lg border border-dashed border-dark-border text-center">
-              <p className="text-body-xs text-muted-foreground">
-                Upload bukti pembayaran (akan tersedia di update mendatang)
-              </p>
-              <button
-                disabled
-                className="mt-2 px-4 py-2 bg-primary/20 text-primary text-body-xs rounded-lg opacity-50 cursor-not-allowed"
-              >
-                Upload Bukti Bayar
-              </button>
-            </div>
+            {/* Upload Form */}
+            <UploadProofForm orderId={order.id} onSuccess={fetchOrderDetail} />
           </div>
         </div>
       )}
