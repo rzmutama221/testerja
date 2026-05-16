@@ -8,13 +8,10 @@ import nodemailer from 'nodemailer';
  */
 
 // Singleton transporter
-// secure: true  → pakai SSL (port 465)
-// secure: false → pakai STARTTLS (port 587) — default Mailtrap & banyak provider
-const smtpPort = Number(process.env.SMTP_PORT) || 465;
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: smtpPort,
-  secure: smtpPort === 465, // true jika port 465 (SSL), false jika port 587 (STARTTLS)
+  port: Number(process.env.SMTP_PORT) || 465,
+  secure: Number(process.env.SMTP_PORT) !== 587, // false untuk STARTTLS (port 587), true untuk SSL (port 465)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
